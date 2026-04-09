@@ -1,0 +1,30 @@
+[package]
+name = "dice-game"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+soroban-sdk = "25.3.1"
+# Import the verifier crate to use its generated client for cross-contract calls
+drand-verifier = { path = "../drand-verifier" }
+
+[dev-dependencies]
+soroban-sdk = { version = "25.3.1", features = ["testutils"] }
+drand-verifier = { path = "../drand-verifier", features = [] }
+
+[profile.release]
+opt-level = "z"
+overflow-checks = true
+debug = 0
+strip = "symbols"
+debug-assertions = false
+panic = "abort"
+codegen-units = 1
+lto = true
+
+[profile.release-with-logs]
+inherits = "release"
+debug-assertions = true

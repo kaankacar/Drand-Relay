@@ -1,0 +1,20 @@
+# Plan — local only, not for public repo
+plan.md
+
+# Secrets
+.env
+feeder/.env
+
+# Rust build artifacts
+target/
+
+# Node
+node_modules/
+feeder/node_modules/
+frontend/node_modules/
+
+# Frontend build
+frontend/dist/
+
+# Stellar CLI
+.stellar/

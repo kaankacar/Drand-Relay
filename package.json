@@ -1,0 +1,12 @@
+{
+  "name": "zkvrf",
+  "private": true,
+  "scripts": {
+    "fund": "curl \"https://friendbot.stellar.org?addr=$(stellar keys address feeder)\"",
+    "build:contracts": "stellar contract build",
+    "deploy:verifier": "stellar contract build && stellar contract deploy --wasm target/wasm32-unknown-unknown/release/drand_verifier.wasm --source feeder --network testnet",
+    "deploy:dice": "stellar contract deploy --wasm target/wasm32-unknown-unknown/release/dice_game.wasm --source feeder --network testnet -- --verifier $VERIFIER_CONTRACT_ID",
+    "feeder": "cd feeder && npm run feeder",
+    "dev": "cd frontend && npm run dev"
+  }
+}
