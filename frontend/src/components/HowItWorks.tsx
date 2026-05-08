@@ -97,23 +97,24 @@ drand quicknet  (League of Entropy threshold beacon, 3-second period)
 feeder  (Node.js / TypeScript, this repo /feeder)
   ① polls api.drand.sh/…/public/latest every 3 seconds
   ② decompresses G1 sig: 48 bytes → 96 bytes (Soroban format)
-  ③ calls verifier.push(round, sig) on Stellar
+  ③ calls verifier.push(round, sig_compressed, sig_uncompressed) on Stellar
   ④ also serves a REST API: GET /random, GET /feed, GET /random/:round
   ▼
 drand verifier contract  (Soroban / Rust, /contracts/drand-verifier)
-  ① msg    = sha256(round as big-endian u64)
-  ② H(msg) = hash_to_g1(msg, DST)             hash-to-curve, RFC 9380
-  ③ valid  = pairing_check([sig, H(msg)], [−g₂, pk])    CAP-0059
-  ④ if valid → store  randomness[round] = sha256(sig)
+  ① bind compressed ↔ uncompressed encodings (X bytes + y-sign)
+  ② msg    = sha256(round as big-endian u64)
+  ③ H(msg) = hash_to_g1(msg, DST)             hash-to-curve, RFC 9380
+  ④ valid  = pairing_check([sig, H(msg)], [−g₂, pk])    CAP-0059
+  ⑤ if valid → store  randomness[round] = sha256(sig_compressed)
+                                          ↑ matches api.drand.sh
   ▼
 any Soroban contract  ──cross-contract call──▶  verifier.get(round)
         `}</Block>
 
-        <Section title="Deployed on Stellar testnet">
+        <Section title="drand source">
           <div className="space-y-1 font-mono text-xs">
-            <p><span className="text-gray-500">Verifier  </span><span className="text-gray-200 break-all">CAHK3UIQJM63WD2YOU6W6V3AVCVM3QNYPCFMU7KIJMRRIOEURRRWCIN6</span></p>
-            <p><span className="text-gray-500">Dice game </span><span className="text-gray-200 break-all">CCP4B6RX7RH3OM7AVY5VO2COZK2JTEPE4W5YJ2X7Q5GV6QK77O4YFPKD</span></p>
             <p><span className="text-gray-500">drand     </span><span className="text-gray-200">quicknet · bls-unchained-g1-rfc9380 · 3s period</span></p>
+            <p><span className="text-gray-500">contracts </span><span className="text-gray-200">deploy your own — see README</span></p>
           </div>
         </Section>
       </Card>
@@ -151,11 +152,13 @@ let valid = bls.pairing_check(
           </p>
         </Section>
 
-        <Section title="Why randomness = sha256(signature)">
+        <Section title="Why randomness = sha256(compressed signature)">
           <p>
-            The signature itself is a valid group element — hashing it first gives uniform 32-byte output
-            and matches the drand protocol spec. The feeder re-derives this from the verified sig rather
-            than trusting the <Code>randomness</Code> field returned by the API.
+            The signature itself is a valid group element — hashing it first gives uniform 32-byte output.
+            The contract hashes the canonical 48-byte compressed encoding, which is exactly what
+            <Code>api.drand.sh</Code> hashes for its published <Code>randomness</Code> field, so on-chain
+            and off-chain values match round-for-round. The feeder sends both compressed and uncompressed
+            forms and the contract checks they describe the same point before trusting either.
           </p>
         </Section>
       </Card>
@@ -179,7 +182,7 @@ Phase 1 — COMMIT  (dice_game.roll)
 
 Phase 2 — WAIT  (~60 seconds in this app)
   The feeder pushes target_round to verifier.push()
-  verifier stores: randomness[target_round] = sha256(sig)
+  verifier stores: randomness[target_round] = sha256(sig_compressed)
 
 Phase 3 — REVEAL  (dice_game.settle)
   Cross-contract call: verifier.get(target_round) → BytesN<32>
@@ -205,7 +208,7 @@ use soroban_sdk::{contractclient, Address, BytesN, Env};
 #[contractclient(name = "DrandVerifierClient")]
 pub trait DrandVerifier {
     fn get(env: Env, round: u64) -> Option<BytesN<32>>;
-    fn latest(env: Env) -> (u64, BytesN<32>);
+    fn latest(env: Env) -> Option<(u64, BytesN<32>)>;
 }
           `}</Block>
         </Section>

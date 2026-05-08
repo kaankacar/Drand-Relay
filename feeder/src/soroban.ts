@@ -1,16 +1,20 @@
 /**
- * soroban.ts — build and submit push(round, sig) transactions to the
- * drand verifier contract on Stellar testnet.
+ * soroban.ts — build and submit push(round, sig_compressed, sig_uncompressed)
+ * transactions to the drand verifier contract on Stellar testnet.
  *
  * Key patterns:
  *   - Always simulate before submit (assembleTransaction adds resource limits)
  *   - Track sequence number in memory; reload on tx_bad_seq
  *   - Retry once on sequence errors before giving up
  *
- * Signature decompression:
+ * Signature encoding:
  *   drand API returns 48-byte compressed G1 (96 hex chars).
- *   Soroban contract expects 96-byte uncompressed G1 (192 hex chars: X||Y).
- *   We decompress here before building the transaction.
+ *   The contract expects BOTH:
+ *     - the 48-byte compressed sig as published (so on-chain randomness =
+ *       sha256(compressed) matches drand's `randomness` field)
+ *     - a 96-byte uncompressed sig (X||Y, no flag bits) for the BLS pairing
+ *       check, since Soroban's host BLS API requires uncompressed input.
+ *   The contract verifies both encode the same point before storing anything.
  */
 
 import * as StellarSdk from "@stellar/stellar-sdk";
@@ -79,8 +83,14 @@ function decompressG1(compressedHex: string): Buffer {
  * @returns tx hash on success
  */
 export async function pushBeacon(round: number, sigHex: string): Promise<string> {
-  // Decompress: 48-byte compressed G1 → 96-byte uncompressed (Soroban format)
-  const sigBuffer = decompressG1(sigHex);
+  // Send the 48-byte compressed sig as drand published it, plus a 96-byte
+  // uncompressed copy for the host pairing check. The contract checks they
+  // encode the same point before storing anything.
+  const sigCompressed = Buffer.from(sigHex, "hex");
+  if (sigCompressed.length !== 48) {
+    throw new Error(`compressed sig must be 48 bytes, got ${sigCompressed.length}`);
+  }
+  const sigUncompressed = decompressG1(sigHex);
 
   const account = await getNextSequenceAccount();
 
@@ -94,7 +104,8 @@ export async function pushBeacon(round: number, sigHex: string): Promise<string>
       contract.call(
         "push",
         StellarSdk.nativeToScVal(BigInt(round), { type: "u64" }),
-        StellarSdk.xdr.ScVal.scvBytes(sigBuffer),
+        StellarSdk.xdr.ScVal.scvBytes(sigCompressed),
+        StellarSdk.xdr.ScVal.scvBytes(sigUncompressed),
       )
     )
     .setTimeout(30)
@@ -165,15 +176,15 @@ export async function getLatestVerifiedRound(): Promise<{
 
     const simulation = await rpc.simulateTransaction(tx);
     if (RpcNamespace.Api.isSimulationError(simulation)) {
-      return null; // contract panics if no round yet
+      return null;
     }
 
     const result = simulation.result?.retval;
     if (!result) return null;
 
-    // Result is a tuple (u64, BytesN<32>) — use scValToNative for safe parsing
-    const native = StellarSdk.scValToNative(result) as [bigint, Buffer];
-    if (!Array.isArray(native) || native.length < 2) return null;
+    // Result is Option<(u64, BytesN<32>)> — None when no round verified yet.
+    const native = StellarSdk.scValToNative(result);
+    if (native == null || !Array.isArray(native) || native.length < 2) return null;
 
     const round = Number(native[0]);
     const randomness = Buffer.from(native[1]).toString("hex");
