@@ -11,7 +11,7 @@ Just point your contract at the verifier address below and read randomness:
 |---|---|
 | **Verifier contract** | `CAESC7SC5EW5P2P3IM5Q7E64ZNDATVSN5F57NTCH5E7GJRPDM76KF7QM` |
 | **Dice game (demo)** | `CCBHSZD3AR6DQMPXBUAT5RELARIMFPZEN6ZLC3SIHU6UQOLUCB35LYUI` |
-| **Feeder REST API** | `https://<deployment-in-progress>.duckdns.org` *(URL will be filled in once the public feeder is live — see [docs/RUNBOOK.md](docs/RUNBOOK.md) for the operator-side deploy)* |
+| **Feeder REST API** | `https://stellardrand.duckdns.org` *(coming online — see [docs/RUNBOOK.md](docs/RUNBOOK.md) for the operator-side deploy)* |
 | **Network** | Stellar testnet |
 | **drand source** | quicknet · `bls-unchained-g1-rfc9380` · 3s period |
 
