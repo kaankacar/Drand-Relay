@@ -246,7 +246,7 @@ pub fn reveal(env: Env, user: Address) -> u32 {
 // Poll until the target round is available on-chain, then call reveal()
 async function waitForRound(targetRound: number): Promise<void> {
   while (true) {
-    const res = await fetch(\`http://localhost:3001/random/\${targetRound}\`);
+    const res = await fetch(\`https://stellardrand.duckdns.org/random/\${targetRound}\`);
     if (res.ok) return; // round is verified on-chain
     await new Promise(r => setTimeout(r, 3000));
   }

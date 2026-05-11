@@ -8,7 +8,7 @@
  *   - signTransaction() takes { networkPassphrase, address }
  *
  * After installing deps run:
- *   cd frontend && npx jsr add @creit-tech/stellar-wallets-kit
+ *   cd demo && npx jsr add @creit-tech/stellar-wallets-kit
  */
 
 import { StellarWalletsKit } from "@creit-tech/stellar-wallets-kit/sdk";

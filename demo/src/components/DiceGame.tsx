@@ -8,7 +8,7 @@ import {
 } from "../wallet.ts";
 import { Contract, TransactionBuilder, Address, nativeToScVal, Networks, scValToNative, rpc as RpcNamespace } from "@stellar/stellar-sdk";
 
-const FEEDER_URL        = import.meta.env.VITE_FEEDER_URL ?? "http://localhost:3001";
+const FEEDER_URL        = import.meta.env.VITE_FEEDER_URL ?? "https://stellardrand.duckdns.org";
 const NETWORK_PASSPHRASE = import.meta.env.VITE_NETWORK_PASSPHRASE ?? Networks.TESTNET;
 const QUICKNET_GENESIS  = 1_692_803_367;
 const QUICKNET_PERIOD   = 3;

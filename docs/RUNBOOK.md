@@ -157,7 +157,7 @@ list before enabling.
 ## Step 8 — Clone the beacon repo on the VPS
 
 ```bash
-git clone https://github.com/kaankacar/beacon.git /opt/beacon
+git clone https://github.com/kaankacar/Drand-Relay.git /opt/beacon
 cd /opt/beacon/feeder
 ```
 

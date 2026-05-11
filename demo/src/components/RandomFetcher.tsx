@@ -8,7 +8,7 @@
 
 import React, { useState } from "react";
 
-const FEEDER_URL = import.meta.env.VITE_FEEDER_URL ?? "http://localhost:3001";
+const FEEDER_URL = import.meta.env.VITE_FEEDER_URL ?? "https://stellardrand.duckdns.org";
 
 interface RandomData {
   round: number;

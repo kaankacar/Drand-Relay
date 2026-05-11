@@ -7,7 +7,7 @@
 
 import React, { useEffect, useState, useRef } from "react";
 
-const FEEDER_URL = import.meta.env.VITE_FEEDER_URL ?? "http://localhost:3001";
+const FEEDER_URL = import.meta.env.VITE_FEEDER_URL ?? "https://stellardrand.duckdns.org";
 
 interface BeaconEntry {
   round: number;
