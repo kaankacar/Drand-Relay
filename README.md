@@ -11,13 +11,21 @@ Just point your contract at the verifier address below and read randomness:
 |---|---|
 | **Verifier contract** | `CAESC7SC5EW5P2P3IM5Q7E64ZNDATVSN5F57NTCH5E7GJRPDM76KF7QM` |
 | **Dice game (demo)** | `CCBHSZD3AR6DQMPXBUAT5RELARIMFPZEN6ZLC3SIHU6UQOLUCB35LYUI` |
-| **Feeder REST API** | `https://stellardrand.duckdns.org` *(coming online — see [docs/RUNBOOK.md](docs/RUNBOOK.md) for the operator-side deploy)* |
+| **Feeder REST API** | `https://stellardrand.duckdns.org` *(live, pushing a fresh round every ~3s)* |
 | **Network** | Stellar testnet |
 | **drand source** | quicknet · `bls-unchained-g1-rfc9380` · 3s period |
 
+Quick sanity check:
+
+```bash
+curl -s https://stellardrand.duckdns.org/random | jq
+# → { round, randomness, timestamp } — randomness is sha256(compressed_signature)
+#   identical to what api.drand.sh publishes for the same round, byte-for-byte.
+```
+
 The on-chain randomness stored by the verifier is `sha256(compressed_signature)` — exactly the value `api.drand.sh` publishes for the same round. Anyone can cross-check what's on-chain against the public drand API.
 
-You only need to "run your own" if you want a dedicated verifier or feeder for some reason (own custody, mainnet, etc.) — full instructions below.
+You only need to "run your own" if you want a dedicated verifier or feeder (own custody, mainnet, custom drand chain) — operator setup is in [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
 
 ---
 
