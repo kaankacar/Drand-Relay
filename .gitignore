@@ -11,10 +11,10 @@ target/
 # Node
 node_modules/
 feeder/node_modules/
-frontend/node_modules/
+demo/node_modules/
 
-# Frontend build
-frontend/dist/
+# Demo build
+demo/dist/
 
 # Stellar CLI
 .stellar/
