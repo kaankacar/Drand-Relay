@@ -18,8 +18,14 @@ import { Networks, rpc as RpcNamespace, TransactionBuilder, Contract, xdr } from
 const RPC_URL = import.meta.env.VITE_SOROBAN_RPC_URL ?? "https://soroban-testnet.stellar.org";
 const NETWORK_PASSPHRASE = import.meta.env.VITE_NETWORK_PASSPHRASE ?? Networks.TESTNET;
 
-export const VERIFIER_CONTRACT_ID = import.meta.env.VITE_VERIFIER_CONTRACT_ID ?? "";
-export const DICE_CONTRACT_ID = import.meta.env.VITE_DICE_CONTRACT_ID ?? "";
+// Defaults point at the canonical testnet deployment so the demo works
+// out of the box even when no .env file is present (e.g., on GitHub Pages).
+export const VERIFIER_CONTRACT_ID =
+  import.meta.env.VITE_VERIFIER_CONTRACT_ID ??
+  "CAESC7SC5EW5P2P3IM5Q7E64ZNDATVSN5F57NTCH5E7GJRPDM76KF7QM";
+export const DICE_CONTRACT_ID =
+  import.meta.env.VITE_DICE_CONTRACT_ID ??
+  "CCBHSZD3AR6DQMPXBUAT5RELARIMFPZEN6ZLC3SIHU6UQOLUCB35LYUI";
 
 export const rpc = new RpcNamespace.Server(RPC_URL);
 
