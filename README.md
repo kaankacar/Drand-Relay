@@ -34,6 +34,12 @@ You only need to "run your own" if you want a dedicated verifier/feeder (own cus
 
 ---
 
+## Architecture at a glance
+
+<p align="center"><img src="docs/architecture.svg" alt="Drand-Relay architecture: drand → feeder (3 channel accounts) → Stellar verifier contract → consumer contract" width="100%"></p>
+
+---
+
 ## How to fetch randomness
 
 Three places randomness shows up: inside a Soroban contract (the main use case), from off-chain code (an SDK or curl), and from a browser frontend.

@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 380" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#6b7280"/>
+    </marker>
+    <marker id="arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#7c3aed"/>
+    </marker>
+  </defs>
+
+  <!-- Off-chain zone -->
+  <rect x="20" y="40" width="460" height="240" rx="14" fill="#f9fafb" stroke="#e5e7eb"/>
+  <text x="40" y="64" font-size="11" fill="#6b7280" font-weight="700" letter-spacing="1.2">OFF-CHAIN</text>
+
+  <!-- On-chain zone -->
+  <rect x="500" y="40" width="420" height="240" rx="14" fill="#f5f3ff" stroke="#ddd6fe"/>
+  <text x="520" y="64" font-size="11" fill="#6d28d9" font-weight="700" letter-spacing="1.2">ON-CHAIN · STELLAR TESTNET</text>
+
+  <!-- drand quicknet -->
+  <rect x="44" y="100" width="172" height="92" rx="10" fill="#ffffff" stroke="#374151" stroke-width="1.5"/>
+  <text x="130" y="130" text-anchor="middle" fill="#111827" font-size="15" font-weight="600">drand quicknet</text>
+  <text x="130" y="152" text-anchor="middle" fill="#6b7280" font-size="11">League of Entropy</text>
+  <text x="130" y="170" text-anchor="middle" fill="#6b7280" font-size="11">threshold BLS</text>
+  <text x="130" y="184" text-anchor="middle" fill="#6b7280" font-size="11">round + sig every 3s</text>
+
+  <!-- Feeder -->
+  <rect x="284" y="100" width="172" height="92" rx="10" fill="#ffffff" stroke="#374151" stroke-width="1.5"/>
+  <text x="370" y="130" text-anchor="middle" fill="#111827" font-size="15" font-weight="600">feeder</text>
+  <text x="370" y="152" text-anchor="middle" fill="#6b7280" font-size="11">Node.js · VPS</text>
+  <text x="370" y="170" text-anchor="middle" fill="#6b7280" font-size="11">poll · decompress</text>
+  <text x="370" y="184" text-anchor="middle" fill="#6b7280" font-size="11">rotate · submit</text>
+
+  <!-- Channel accounts callout -->
+  <text x="370" y="222" text-anchor="middle" fill="#6b7280" font-size="11" font-weight="600">channel accounts</text>
+  <text x="370" y="237" text-anchor="middle" fill="#9ca3af" font-size="10">round % 3</text>
+  <circle cx="330" cy="258" r="13" fill="#fef3c7" stroke="#d97706" stroke-width="1.5"/>
+  <text x="330" y="263" text-anchor="middle" fill="#92400e" font-size="12" font-weight="700">a</text>
+  <circle cx="370" cy="258" r="13" fill="#fef3c7" stroke="#d97706" stroke-width="1.5"/>
+  <text x="370" y="263" text-anchor="middle" fill="#92400e" font-size="12" font-weight="700">b</text>
+  <circle cx="410" cy="258" r="13" fill="#fef3c7" stroke="#d97706" stroke-width="1.5"/>
+  <text x="410" y="263" text-anchor="middle" fill="#92400e" font-size="12" font-weight="700">c</text>
+
+  <!-- Verifier contract -->
+  <rect x="524" y="100" width="186" height="92" rx="10" fill="#ffffff" stroke="#6d28d9" stroke-width="1.5"/>
+  <text x="617" y="124" text-anchor="middle" fill="#111827" font-size="15" font-weight="600">verifier contract</text>
+  <text x="617" y="142" text-anchor="middle" fill="#9ca3af" font-size="10" font-family="ui-monospace, SFMono-Regular, monospace">CAESC7SC…F7QM</text>
+  <text x="617" y="164" text-anchor="middle" fill="#6d28d9" font-size="11" font-weight="600">BLS12-381 pairing check</text>
+  <text x="617" y="180" text-anchor="middle" fill="#6b7280" font-size="11">CAP-0059</text>
+
+  <!-- Consumer contract -->
+  <rect x="754" y="100" width="146" height="92" rx="10" fill="#ffffff" stroke="#6d28d9" stroke-width="1.5"/>
+  <text x="827" y="128" text-anchor="middle" fill="#111827" font-size="15" font-weight="600">your contract</text>
+  <text x="827" y="148" text-anchor="middle" fill="#6b7280" font-size="11">any Soroban dApp</text>
+  <text x="827" y="172" text-anchor="middle" fill="#6d28d9" font-size="11" font-weight="600">verifier.get(round)</text>
+
+  <!-- Arrows -->
+  <line x1="216" y1="146" x2="284" y2="146" stroke="#6b7280" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="250" y="138" text-anchor="middle" fill="#6b7280" font-size="11">poll</text>
+
+  <path d="M 456 146 L 524 146" stroke="#7c3aed" stroke-width="1.8" fill="none" marker-end="url(#arrow-accent)"/>
+  <text x="490" y="138" text-anchor="middle" fill="#6d28d9" font-size="11" font-weight="600">push(...)</text>
+  <text x="490" y="160" text-anchor="middle" fill="#9ca3af" font-size="10">cross-contract</text>
+
+  <line x1="710" y1="146" x2="754" y2="146" stroke="#6b7280" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="732" y="138" text-anchor="middle" fill="#6b7280" font-size="11">read</text>
+
+  <!-- Footer caption -->
+  <text x="470" y="316" text-anchor="middle" fill="#374151" font-size="13" font-weight="600">
+    The pairing check is the trust anchor — no operator can bias the randomness, only stall it.
+  </text>
+  <text x="470" y="338" text-anchor="middle" fill="#6b7280" font-size="11">
+    Channel-account rotation (3 signers) overcomes Stellar's 1-tx-per-account-per-ledger limit · landing rate ~95%
+  </text>
+  <text x="470" y="356" text-anchor="middle" fill="#9ca3af" font-size="10">
+    On-chain randomness = sha256(compressed signature) — matches api.drand.sh byte-for-byte
+  </text>
+</svg>
