@@ -12,6 +12,7 @@ Beacon runs as a public testnet service — **you don't need to deploy anything*
 
 | | |
 |---|---|
+| **Live demo** | https://kaankacar.github.io/Drand-Relay/ |
 | **Verifier contract** | `CAESC7SC5EW5P2P3IM5Q7E64ZNDATVSN5F57NTCH5E7GJRPDM76KF7QM` |
 | **Dice game (demo contract)** | `CCBHSZD3AR6DQMPXBUAT5RELARIMFPZEN6ZLC3SIHU6UQOLUCB35LYUI` |
 | **Feeder REST API** | `https://stellardrand.duckdns.org` *(live, pushing a fresh round every ~3s)* |

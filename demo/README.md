@@ -3,6 +3,9 @@
 A small React SPA that exercises every public surface of the canonical
 deployment, so you can see the relay working without writing any code.
 
+**Live at https://kaankacar.github.io/Drand-Relay/** — auto-deploys from
+`main` via `.github/workflows/deploy-demo.yml`.
+
 ## What's in it
 
 | Tab | What it does |
