@@ -216,6 +216,35 @@ The contract's [test suite](contracts/drand-verifier/src/lib.rs#L260) includes a
 
 ---
 
+## How the feeder keeps up with drand
+
+drand publishes a new round every **3 seconds**. Stellar caps each source account at **1 transaction per ledger**, and ledgers close every ~5 seconds (a Soroban-era protocol rule covering all tx submission). So a single signer maxes out at ~12 push/min vs drand's 20 round/min — it would drop ~40% of rounds before they ever reach the chain.
+
+The fix is Stellar's standard **channel-accounts pattern**: rotate signing across multiple source accounts so each round goes to a different signer, sidestepping the per-account-per-ledger cap.
+
+```
+drand round N    →  ch-a.push()       (ledger M includes 1 tx from ch-a)
+drand round N+1  →  ch-b.push()       (ledger M includes 1 tx from ch-b)
+drand round N+2  →  ch-c.push()       (ledger M includes 1 tx from ch-c)
+drand round N+3  →  ch-a.push()       (ledger M+1)
+…
+```
+
+The canonical testnet feeder uses **3 channel accounts** rotated by `round % 3`. Each keypair maintains its own pre-incremented sequence cache and submits fire-and-forget (no per-tx confirmation polling — that's what made the single-signer version slow). On any submission error, that channel's sequence cache is dropped so the next attempt re-reads from the network.
+
+| Metric | Value |
+|---|---|
+| Theoretical capacity | 3 channels × 1 tx / 5s = ~36 push/min |
+| drand rate | 20 round/min |
+| Observed landing rate | **~95%** steady-state |
+| Failed tx | 0 |
+
+The remaining ~5% miss rate comes from fire-and-forget's inherent blind spot — submitted tx's that land in mempool but get dropped at ledger close before we'd know. Closing the last ~5pp would require an async confirm tracker + retry-on-different-channel logic; for testnet this is left as a "later if needed" optimisation, since dApps using commit/reveal target a future round + buffer and don't care which specific round arrived.
+
+Setup details (channel-account creation, env wiring, deploying with Docker Compose) are in [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
+
+---
+
 ## Why we need this
 
 Soroban's built-in `env.prng()` is seeded from the ledger hash — all transactions in the same ledger see the same value, and validators can bias the output. Soroban contracts also can't make HTTP calls, so there was no way to bring external randomness on-chain without a relay.
@@ -244,7 +273,11 @@ Converted to USD at three different XLM price points:
 | $0.15 | $138 | $589 | $7,170 |
 | $0.40 | $367 | $1,572 | $19,120 |
 
-**Testnet is free** (the feeder account is refunded by friendbot on a weekly cron). The numbers above only matter if you run a **mainnet** deployment — see [`docs/MAINNET.md`](docs/MAINNET.md) for funding strategy and best practices.
+The 28,800 push/day figure assumes 100% landing rate. With the observed ~95% steady-state rate the actual spend is ~5% lower — Stellar only charges for tx's that actually land in a ledger, so mempool-dropped attempts don't burn fees. Practical spend is closer to **~125 XLM/day** total across the 3 channel accounts.
+
+Total network spend is **the same as a single-signer setup** — channel accounts split the tx volume across multiple signers, they don't multiply spend. Each channel handles roughly 1/3 of the daily push count.
+
+**Testnet is free** (channel accounts get refilled by friendbot on a weekly cron). The numbers above only matter if you run a **mainnet** deployment — see [`docs/MAINNET.md`](docs/MAINNET.md) for funding strategy and best practices.
 
 Mainnet fees may differ slightly from testnet (validators are the same code so resource fees match; only the base inclusion fee differs, which is tiny relative to the pairing-check resource cost). Plan with a 20% buffer just in case.
 
