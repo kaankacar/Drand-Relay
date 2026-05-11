@@ -9,12 +9,7 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
 import { roundToTimestamp } from "./drand.js";
-import { getLatestVerifiedRound, rpc } from "./soroban.js";
-
-const READONLY_SOURCE_PUBKEY = process.env.READONLY_SOURCE_PUBKEY ?? "";
-if (!READONLY_SOURCE_PUBKEY) {
-  throw new Error("READONLY_SOURCE_PUBKEY not set");
-}
+import { getLatestVerifiedRound, rpc, READONLY_SOURCE_PUBKEY } from "./soroban.js";
 import * as StellarSdk from "@stellar/stellar-sdk";
 import { rpc as RpcNamespace } from "@stellar/stellar-sdk";
 

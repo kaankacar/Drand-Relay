@@ -42,7 +42,7 @@ Latency matters: the feeder needs to submit a tx within a few seconds of each dr
 
 ## Step 2 — Create and fund mainnet channel accounts
 
-You'll need **3 channel accounts** on mainnet (same pattern as testnet — Stellar caps each source account at 1 tx/ledger, so 3 channels are needed to keep up with drand's 3s round rate). All three are signers managed by OpenZeppelin Relayer; the deployer key from Step 3 stays separate.
+You'll need **3 channel accounts** on mainnet (same pattern as testnet — Stellar caps each source account at 1 tx/ledger, so 3 channels are needed to keep up with drand's 3s round rate). All three keypairs are configured directly in the feeder's `.env` file; the deployer key from Step 3 stays separate.
 
 On your local machine:
 

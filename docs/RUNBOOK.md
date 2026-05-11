@@ -165,59 +165,31 @@ cd /opt/beacon/feeder
 
 ---
 
-## Step 9 — Create the env files (feeder + OZ Relayer)
+## Step 9 — Create the feeder `.env` (with 3 channel-account secrets)
 
-The feeder pushes via [OpenZeppelin Relayer](https://docs.openzeppelin.com/relayer/stellar) using a **channel-accounts** pattern: 3 separate Stellar testnet keypairs ("channel accounts") that each submit 1 tx/ledger. Stellar caps source accounts at 1 tx per ledger, so 3 channels × 1 tx/5s ≈ 36 tx/min, comfortably above drand's 20 rounds/min.
+The feeder uses a **channel-accounts** pattern: 3 separate Stellar testnet keypairs that share the push load. Stellar caps each source account at 1 tx per ledger (a Soroban-era protocol rule covering all submission), so a single signer maxes at ~12 tx/min vs drand's 20/min — too slow. Three channels gives ~36 tx/min capacity with margin.
 
-Generate a random API key shared between feeder and OZ Relayer:
+Generate the 3 channel accounts on your local machine and fund them via friendbot:
 
 ```bash
-API_KEY=$(openssl rand -hex 32)
-echo "API_KEY (save this): $API_KEY"
+for n in a b c; do stellar keys generate beacon-channel-$n --network testnet --fund; done
 ```
 
-Feeder config (no secrets here — feeder doesn't sign tx's anymore, just POSTs to OZ Relayer):
+Then list their secret keys (you'll paste them into the VPS):
 
 ```bash
-cat > /opt/beacon/feeder/.env <<EOF
-SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
-NETWORK_PASSPHRASE=Test SDF Network ; September 2015
-VERIFIER_CONTRACT_ID=CAESC7SC5EW5P2P3IM5Q7E64ZNDATVSN5F57NTCH5E7GJRPDM76KF7QM
-DICE_CONTRACT_ID=CCBHSZD3AR6DQMPXBUAT5RELARIMFPZEN6ZLC3SIHU6UQOLUCB35LYUI
-PORT=3001
-DRAND_CHAIN_HASH=52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971
-OZ_RELAYER_URL=http://oz-relayer:8080
-OZ_RELAYER_API_KEY=$API_KEY
-OZ_RELAYER_IDS=relayer-a,relayer-b,relayer-c
-READONLY_SOURCE_PUBKEY=G_PUT_ANY_FUNDED_TESTNET_PUBKEY_HERE
-EOF
+for n in a b c; do echo "CHANNEL_$(echo $n | tr a-z A-Z)_SECRET=$(stellar keys show beacon-channel-$n)"; done
 ```
 
-OZ Relayer config (channel-account secrets + API key — the secret-bearing file):
+On the VPS, paste this single-line command, replacing the three `<S_…>` placeholders with the real secret values:
 
-```bash
-cat > /opt/beacon/feeder/.relayer.env <<EOF
-CHANNEL_A_SECRET=S_CHANNEL_A_SECRET_HERE
-CHANNEL_B_SECRET=S_CHANNEL_B_SECRET_HERE
-CHANNEL_C_SECRET=S_CHANNEL_C_SECRET_HERE
-API_KEY=$API_KEY
-REDIS_URL=redis://redis:6379
-EOF
 ```
-
-Replace the three `S_…` placeholders with the actual secret keys the operator hands you (3 channel accounts created with `stellar keys generate beacon-channel-{a,b,c} --network testnet --fund`). Replace `G_PUT_ANY_FUNDED_TESTNET_PUBKEY_HERE` with any of the channel accounts' **public** key (used only as a no-op source for read-only simulations).
-
-Lock down both files:
-
-```bash
-chmod 600 /opt/beacon/feeder/.env /opt/beacon/feeder/.relayer.env
+printf '%s\n' 'SOROBAN_RPC_URL=https://soroban-testnet.stellar.org' 'NETWORK_PASSPHRASE=Test SDF Network ; September 2015' 'VERIFIER_CONTRACT_ID=CAESC7SC5EW5P2P3IM5Q7E64ZNDATVSN5F57NTCH5E7GJRPDM76KF7QM' 'DICE_CONTRACT_ID=CCBHSZD3AR6DQMPXBUAT5RELARIMFPZEN6ZLC3SIHU6UQOLUCB35LYUI' 'PORT=3001' 'DRAND_CHAIN_HASH=52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971' 'CHANNEL_A_SECRET=<S_CHANNEL_A>' 'CHANNEL_B_SECRET=<S_CHANNEL_B>' 'CHANNEL_C_SECRET=<S_CHANNEL_C>' > /opt/beacon/feeder/.env && chmod 600 /opt/beacon/feeder/.env
 ```
 
 ---
 
-## Step 10 — Start the stack with Docker Compose
-
-The stack is three services: **feeder** (drand polling + REST API), **oz-relayer** (multi-signer Stellar tx submitter), **redis** (OZ Relayer's job queue and signer state).
+## Step 10 — Start the feeder with Docker Compose
 
 ```bash
 cd /opt/beacon/feeder
@@ -225,15 +197,13 @@ docker compose up -d --build
 docker compose ps
 ```
 
-First run takes ~2-3 minutes (pulls Node 20 + OZ Relayer + Redis images, builds feeder).
+First run takes ~1 minute (pulls Node 20 alpine, installs deps, builds the feeder image).
 
-`docker compose ps` should show all three containers as `Up`:
+`docker compose ps` should show a single container as `Up`:
 
 ```
-NAME                IMAGE                                STATUS
-beacon-feeder       feeder-feeder                        Up
-beacon-oz-relayer   openzeppelin/openzeppelin-relayer    Up
-beacon-redis        redis:7-alpine                       Up
+NAME            IMAGE           STATUS
+beacon-feeder   feeder-feeder   Up
 ```
 
 Check feeder logs:
@@ -246,17 +216,18 @@ Within ~15 seconds you should see lines like:
 ```
 [feeder] starting drand quicknet feeder
 [feeder] queuing round NNNNNN
-[feeder] → relayer-a queued round NNNNNN (job j_abc12…)
-[feeder] → relayer-b queued round NNNNNN+1 (job j_def34…)
-[feeder] → relayer-c queued round NNNNNN+2 (job j_ghi56…)
+[feeder] → ch-a round NNNNNN sent — tx abc123def…
+[feeder] → ch-b round NNNNNN+1 sent — tx 456fedcba…
+[feeder] → ch-c round NNNNNN+2 sent — tx 7890aaabbb…
+[feeder] → ch-a round NNNNNN+3 sent — tx cccdddeee…
 ```
 
-The rotation across `relayer-a/b/c` is what unlocks the throughput. Press **Ctrl+C** to leave the log view (containers keep running).
+The rotation across `ch-a / ch-b / ch-c` is what unlocks the throughput — each channel account submits 1 tx/ledger; 3 of them in parallel cover drand's 20-rounds-per-minute rate with room to spare. Press **Ctrl+C** to leave the log view (the container keeps running).
 
 If you see errors:
-- `OZ Relayer returned HTTP 401` — `OZ_RELAYER_API_KEY` in `.env` doesn't match `API_KEY` in `.relayer.env`. Use the same value in both.
-- `OZ Relayer returned HTTP 400/500` — likely a malformed `invoke_contract` payload or a channel account that isn't funded. Check `docker logs beacon-oz-relayer` for the underlying error.
-- `account not found` in OZ Relayer logs — one of the channel accounts isn't on testnet yet; re-run friendbot for its public address.
+- `No CHANNEL_*_SECRET configured` — one of the three secrets is missing from `.env`. Re-check with `grep CHANNEL_ /opt/beacon/feeder/.env`.
+- `simulation failed` or `account not found` — one of the channel keypairs isn't funded on testnet; re-run friendbot for that public address.
+- `tx_bad_seq` (rare, recoverable) — the feeder will drop that channel's sequence cache and reload from the network on the next attempt. Should self-heal within a few rounds.
 
 ---
 
