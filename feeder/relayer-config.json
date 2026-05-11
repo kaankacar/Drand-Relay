@@ -1,0 +1,85 @@
+{
+  "signers": [
+    {
+      "id": "signer-a",
+      "type": "local",
+      "config": {
+        "raw_key": {
+          "value": { "env": "CHANNEL_A_SECRET" }
+        }
+      }
+    },
+    {
+      "id": "signer-b",
+      "type": "local",
+      "config": {
+        "raw_key": {
+          "value": { "env": "CHANNEL_B_SECRET" }
+        }
+      }
+    },
+    {
+      "id": "signer-c",
+      "type": "local",
+      "config": {
+        "raw_key": {
+          "value": { "env": "CHANNEL_C_SECRET" }
+        }
+      }
+    }
+  ],
+  "relayers": [
+    {
+      "id": "relayer-a",
+      "name": "Beacon channel A",
+      "network": "testnet",
+      "network_type": "stellar",
+      "signer_id": "signer-a",
+      "paused": false,
+      "policies": {
+        "min_balance": 100000000,
+        "max_fee": 1000000000,
+        "timeout_seconds": 30,
+        "concurrent_transactions": false
+      }
+    },
+    {
+      "id": "relayer-b",
+      "name": "Beacon channel B",
+      "network": "testnet",
+      "network_type": "stellar",
+      "signer_id": "signer-b",
+      "paused": false,
+      "policies": {
+        "min_balance": 100000000,
+        "max_fee": 1000000000,
+        "timeout_seconds": 30,
+        "concurrent_transactions": false
+      }
+    },
+    {
+      "id": "relayer-c",
+      "name": "Beacon channel C",
+      "network": "testnet",
+      "network_type": "stellar",
+      "signer_id": "signer-c",
+      "paused": false,
+      "policies": {
+        "min_balance": 100000000,
+        "max_fee": 1000000000,
+        "timeout_seconds": 30,
+        "concurrent_transactions": false
+      }
+    }
+  ],
+  "networks": [
+    {
+      "type": "stellar",
+      "network": "testnet",
+      "rpc_urls": ["https://soroban-testnet.stellar.org"],
+      "average_blocktime_ms": 5000,
+      "is_testnet": true,
+      "passphrase": "Test SDF Network ; September 2015"
+    }
+  ]
+}

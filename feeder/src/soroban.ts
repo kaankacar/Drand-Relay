@@ -1,19 +1,22 @@
 /**
- * soroban.ts — build and submit push(round, sig_compressed, sig_uncompressed)
- * transactions to the drand verifier contract on Stellar testnet.
+ * soroban.ts — submit push(round, sig_compressed, sig_uncompressed) to the
+ * drand verifier contract via OpenZeppelin Relayer's HTTP API.
  *
- * Key patterns:
- *   - Always simulate before submit (assembleTransaction adds resource limits)
- *   - Track sequence number in memory; reload on tx_bad_seq
- *   - Retry once on sequence errors before giving up
+ * Why OZ Relayer:
+ *   Stellar caps each source account at one tx per ledger (Soroban-era rule
+ *   covering both classic and Soroban tx submission). drand publishes a round
+ *   every 3s; with ~5s ledger close a single signer only lands 60% of rounds.
+ *   The fix is the channel-accounts pattern: rotate across multiple signers.
+ *   OZ Relayer hosts those signers, manages their sequence numbers, and
+ *   exposes them via a single HTTP API. We round-robin `round % N` here.
  *
  * Signature encoding:
- *   drand API returns 48-byte compressed G1 (96 hex chars).
- *   The contract expects BOTH:
- *     - the 48-byte compressed sig as published (so on-chain randomness =
- *       sha256(compressed) matches drand's `randomness` field)
+ *   drand API returns 48-byte compressed G1 (96 hex chars). The contract
+ *   expects both:
+ *     - the 48-byte compressed sig as published (on-chain randomness =
+ *       sha256(compressed) matches drand's `randomness` field byte-for-byte)
  *     - a 96-byte uncompressed sig (X||Y, no flag bits) for the BLS pairing
- *       check, since Soroban's host BLS API requires uncompressed input.
+ *       check (Soroban's host BLS API takes uncompressed input).
  *   The contract verifies both encode the same point before storing anything.
  */
 
@@ -26,30 +29,20 @@ const RPC_URL =
 const NETWORK_PASSPHRASE =
   process.env.NETWORK_PASSPHRASE ?? "Test SDF Network ; September 2015";
 const VERIFIER_CONTRACT_ID = process.env.VERIFIER_CONTRACT_ID ?? "";
-const FEEDER_SECRET_KEY = process.env.FEEDER_SECRET_KEY ?? "";
+const OZ_RELAYER_URL = process.env.OZ_RELAYER_URL ?? "http://oz-relayer:8080";
+const OZ_RELAYER_API_KEY = process.env.OZ_RELAYER_API_KEY ?? "";
+const OZ_RELAYER_IDS = (process.env.OZ_RELAYER_IDS ?? "relayer-a,relayer-b,relayer-c")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+const READONLY_SOURCE_PUBKEY = process.env.READONLY_SOURCE_PUBKEY ?? "";
 
 if (!VERIFIER_CONTRACT_ID) throw new Error("VERIFIER_CONTRACT_ID not set");
-if (!FEEDER_SECRET_KEY) throw new Error("FEEDER_SECRET_KEY not set");
+if (!OZ_RELAYER_API_KEY) throw new Error("OZ_RELAYER_API_KEY not set");
+if (OZ_RELAYER_IDS.length === 0) throw new Error("OZ_RELAYER_IDS is empty");
+if (!READONLY_SOURCE_PUBKEY) throw new Error("READONLY_SOURCE_PUBKEY not set");
 
 export const rpc = new RpcNamespace.Server(RPC_URL);
-export const keypair = StellarSdk.Keypair.fromSecret(FEEDER_SECRET_KEY);
-
-/** Cached sequence number to avoid reloading the account on every tx. */
-let cachedSequence: bigint | null = null;
-
-async function getAccount(): Promise<StellarSdk.Account> {
-  const account = await rpc.getAccount(keypair.publicKey());
-  cachedSequence = BigInt(account.sequenceNumber());
-  return account;
-}
-
-async function getNextSequenceAccount(): Promise<StellarSdk.Account> {
-  if (cachedSequence === null) {
-    return getAccount();
-  }
-  cachedSequence++;
-  return new StellarSdk.Account(keypair.publicKey(), cachedSequence.toString());
-}
 
 /**
  * Decompress a 48-byte compressed BLS G1 point to 96-byte Soroban format (X||Y).
@@ -76,95 +69,72 @@ function decompressG1(compressedHex: string): Buffer {
 }
 
 /**
- * Submit a drand beacon to the verifier contract's push() function.
+ * Submit a drand beacon to the verifier contract's push() function via OZ Relayer.
  *
- * @param round    - drand round number
+ * @param round    - drand round number (used for both the contract call and round-robin signer selection)
  * @param sigHex   - hex-encoded BLS G1 signature from API (96 hex chars = 48 bytes compressed)
- * @returns tx hash on success
+ * @returns OZ Relayer job ID on success
  */
 export async function pushBeacon(round: number, sigHex: string): Promise<string> {
-  // Send the 48-byte compressed sig as drand published it, plus a 96-byte
-  // uncompressed copy for the host pairing check. The contract checks they
-  // encode the same point before storing anything.
   const sigCompressed = Buffer.from(sigHex, "hex");
   if (sigCompressed.length !== 48) {
     throw new Error(`compressed sig must be 48 bytes, got ${sigCompressed.length}`);
   }
   const sigUncompressed = decompressG1(sigHex);
 
-  const account = await getNextSequenceAccount();
+  // Round-robin signer selection across configured relayers.
+  const relayerId = OZ_RELAYER_IDS[round % OZ_RELAYER_IDS.length];
 
-  // Build the transaction
-  const contract = new StellarSdk.Contract(VERIFIER_CONTRACT_ID);
-  const tx = new StellarSdk.TransactionBuilder(account, {
-    fee: "1000000", // 0.1 XLM max fee — pairing check is expensive
-    networkPassphrase: NETWORK_PASSPHRASE,
-  })
-    .addOperation(
-      contract.call(
-        "push",
-        StellarSdk.nativeToScVal(BigInt(round), { type: "u64" }),
-        StellarSdk.xdr.ScVal.scvBytes(sigCompressed),
-        StellarSdk.xdr.ScVal.scvBytes(sigUncompressed),
-      )
-    )
-    .setTimeout(30)
-    .build();
+  const body = {
+    network: "testnet",
+    operations: [
+      {
+        type: "invoke_contract",
+        contract_address: VERIFIER_CONTRACT_ID,
+        function_name: "push",
+        args: [
+          { u64: String(round) },
+          { bytes: sigCompressed.toString("hex") },
+          { bytes: sigUncompressed.toString("hex") },
+        ],
+        auth: { type: "source_account" },
+      },
+    ],
+  };
 
-  // Simulate to get resource limits
-  const simulation = await rpc.simulateTransaction(tx);
-  if (RpcNamespace.Api.isSimulationError(simulation)) {
-    throw new Error(`Simulation failed: ${simulation.error}`);
+  const res = await fetch(`${OZ_RELAYER_URL}/api/v1/relayers/${relayerId}/transactions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${OZ_RELAYER_API_KEY}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`OZ Relayer ${relayerId} returned HTTP ${res.status}: ${text.slice(0, 200)}`);
   }
 
-  // Assemble (adds soroban resource envelope)
-  const prepared = RpcNamespace.assembleTransaction(tx, simulation).build();
-  prepared.sign(keypair);
-
-  // Submit
-  try {
-    const response = await rpc.sendTransaction(prepared);
-    if (response.status === "ERROR") {
-      throw new Error(`sendTransaction error: ${JSON.stringify(response)}`);
-    }
-
-    // Poll for confirmation
-    const hash = response.hash;
-    for (let i = 0; i < 20; i++) {
-      await sleep(1500);
-      const status = await rpc.getTransaction(hash);
-      if (status.status === RpcNamespace.Api.GetTransactionStatus.SUCCESS) {
-        return hash;
-      }
-      if (status.status === RpcNamespace.Api.GetTransactionStatus.FAILED) {
-        cachedSequence = null; // reset on failure
-        throw new Error(`Transaction failed: ${hash}`);
-      }
-    }
-    throw new Error(`Transaction timeout: ${hash}`);
-  } catch (err: unknown) {
-    // On sequence error, reload and retry once
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("tx_bad_seq")) {
-      console.warn("[soroban] sequence error, reloading account and retrying");
-      cachedSequence = null;
-      return pushBeacon(round, sigHex);
-    }
-    throw err;
-  }
+  const json = (await res.json().catch(() => ({}))) as { id?: string };
+  const jobId = json.id ?? "(no-id)";
+  console.log(`[feeder] → ${relayerId} queued round ${round} (job ${jobId.slice(0, 12)}…)`);
+  return jobId;
 }
 
 /**
- * Query the verifier contract's latest() function.
+ * Query the verifier contract's latest() function (read-only simulation).
  * Returns { round, randomness } or null if no round verified yet.
+ *
+ * Does NOT go through OZ Relayer — the Soroban RPC's simulateTransaction is
+ * a free read with no fee or rate concern, no need to involve a signer.
  */
 export async function getLatestVerifiedRound(): Promise<{
   round: number;
   randomness: string;
 } | null> {
   try {
-    // rpc.getAccount() returns a StellarSdk.Account — use it directly
-    const account = await rpc.getAccount(keypair.publicKey());
+    const account = await rpc.getAccount(READONLY_SOURCE_PUBKEY);
     const contract = new StellarSdk.Contract(VERIFIER_CONTRACT_ID);
     const tx = new StellarSdk.TransactionBuilder(account, {
       fee: "100",
@@ -193,8 +163,4 @@ export async function getLatestVerifiedRound(): Promise<{
   } catch {
     return null;
   }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
 }

@@ -3,6 +3,7 @@ npm-debug.log
 .env
 .env.*
 !.env.example
+.relayer.env
 .git
 .gitignore
 Dockerfile

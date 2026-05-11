@@ -165,55 +165,80 @@ cd /opt/beacon/feeder
 
 ---
 
-## Step 9 — Create the feeder `.env`
+## Step 9 — Create the env files (feeder + OZ Relayer)
 
-This is the only file with secrets. Replace `S....` with the actual feeder
-secret key the operator gave you.
+The feeder pushes via [OpenZeppelin Relayer](https://docs.openzeppelin.com/relayer/stellar) using a **channel-accounts** pattern: 3 separate Stellar testnet keypairs ("channel accounts") that each submit 1 tx/ledger. Stellar caps source accounts at 1 tx per ledger, so 3 channels × 1 tx/5s ≈ 36 tx/min, comfortably above drand's 20 rounds/min.
+
+Generate a random API key shared between feeder and OZ Relayer:
 
 ```bash
-cat > /opt/beacon/feeder/.env <<'EOF'
-FEEDER_SECRET_KEY=S_REPLACE_ME_WITH_REAL_SECRET
+API_KEY=$(openssl rand -hex 32)
+echo "API_KEY (save this): $API_KEY"
+```
+
+Feeder config (no secrets here — feeder doesn't sign tx's anymore, just POSTs to OZ Relayer):
+
+```bash
+cat > /opt/beacon/feeder/.env <<EOF
 SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
 NETWORK_PASSPHRASE=Test SDF Network ; September 2015
 VERIFIER_CONTRACT_ID=CAESC7SC5EW5P2P3IM5Q7E64ZNDATVSN5F57NTCH5E7GJRPDM76KF7QM
 DICE_CONTRACT_ID=CCBHSZD3AR6DQMPXBUAT5RELARIMFPZEN6ZLC3SIHU6UQOLUCB35LYUI
 PORT=3001
 DRAND_CHAIN_HASH=52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971
+OZ_RELAYER_URL=http://oz-relayer:8080
+OZ_RELAYER_API_KEY=$API_KEY
+OZ_RELAYER_IDS=relayer-a,relayer-b,relayer-c
+READONLY_SOURCE_PUBKEY=G_PUT_ANY_FUNDED_TESTNET_PUBKEY_HERE
 EOF
 ```
 
-Then edit it to paste in the real secret key:
+OZ Relayer config (channel-account secrets + API key — the secret-bearing file):
 
 ```bash
-nano /opt/beacon/feeder/.env
+cat > /opt/beacon/feeder/.relayer.env <<EOF
+CHANNEL_A_SECRET=S_CHANNEL_A_SECRET_HERE
+CHANNEL_B_SECRET=S_CHANNEL_B_SECRET_HERE
+CHANNEL_C_SECRET=S_CHANNEL_C_SECRET_HERE
+API_KEY=$API_KEY
+REDIS_URL=redis://redis:6379
+EOF
 ```
 
-Use arrow keys to navigate, replace `S_REPLACE_ME_WITH_REAL_SECRET` with the
-real secret on the `FEEDER_SECRET_KEY=` line. Save with `Ctrl+O`, `Enter`,
-exit with `Ctrl+X`.
+Replace the three `S_…` placeholders with the actual secret keys the operator hands you (3 channel accounts created with `stellar keys generate beacon-channel-{a,b,c} --network testnet --fund`). Replace `G_PUT_ANY_FUNDED_TESTNET_PUBKEY_HERE` with any of the channel accounts' **public** key (used only as a no-op source for read-only simulations).
 
-Then lock the file so only root can read it:
+Lock down both files:
 
 ```bash
-chmod 600 /opt/beacon/feeder/.env
+chmod 600 /opt/beacon/feeder/.env /opt/beacon/feeder/.relayer.env
 ```
 
 ---
 
-## Step 10 — Start the feeder with Docker
+## Step 10 — Start the stack with Docker Compose
+
+The stack is three services: **feeder** (drand polling + REST API), **oz-relayer** (multi-signer Stellar tx submitter), **redis** (OZ Relayer's job queue and signer state).
 
 ```bash
 cd /opt/beacon/feeder
 docker compose up -d --build
+docker compose ps
 ```
 
-This builds the feeder image and starts the container in the background. First
-run takes ~1 minute because it pulls Node and npm-installs dependencies.
+First run takes ~2-3 minutes (pulls Node 20 + OZ Relayer + Redis images, builds feeder).
 
-Check it's running:
+`docker compose ps` should show all three containers as `Up`:
+
+```
+NAME                IMAGE                                STATUS
+beacon-feeder       feeder-feeder                        Up
+beacon-oz-relayer   openzeppelin/openzeppelin-relayer    Up
+beacon-redis        redis:7-alpine                       Up
+```
+
+Check feeder logs:
 
 ```bash
-docker compose ps
 docker logs -f beacon-feeder
 ```
 
@@ -221,15 +246,17 @@ Within ~15 seconds you should see lines like:
 ```
 [feeder] starting drand quicknet feeder
 [feeder] queuing round NNNNNN
-[feeder] ✓ round NNNNNN confirmed — tx abc123…
+[feeder] → relayer-a queued round NNNNNN (job j_abc12…)
+[feeder] → relayer-b queued round NNNNNN+1 (job j_def34…)
+[feeder] → relayer-c queued round NNNNNN+2 (job j_ghi56…)
 ```
 
-Press **Ctrl+C** to leave the log view (the container keeps running).
+The rotation across `relayer-a/b/c` is what unlocks the throughput. Press **Ctrl+C** to leave the log view (containers keep running).
 
-If you see errors instead — most likely `simulation failed` or `account not
-found` — the feeder secret key in `.env` is wrong, or the testnet account
-isn't funded. Double-check the secret and confirm the account at
-https://stellar.expert/explorer/testnet/account/`<feeder_pubkey>` has XLM.
+If you see errors:
+- `OZ Relayer returned HTTP 401` — `OZ_RELAYER_API_KEY` in `.env` doesn't match `API_KEY` in `.relayer.env`. Use the same value in both.
+- `OZ Relayer returned HTTP 400/500` — likely a malformed `invoke_contract` payload or a channel account that isn't funded. Check `docker logs beacon-oz-relayer` for the underlying error.
+- `account not found` in OZ Relayer logs — one of the channel accounts isn't on testnet yet; re-run friendbot for its public address.
 
 ---
 
@@ -312,21 +339,20 @@ journalctl -t beacon-health -n 50 --no-pager
 
 ---
 
-## Step 14 — Weekly friendbot refill (testnet XLM)
+## Step 14 — Weekly friendbot refill for all 3 channel accounts
 
-Each push costs a few stroops. The feeder account drains slowly. This cron
-tops it up every Sunday at midnight UTC.
+Each push costs ~45,475 stroops. With 3 channel accounts each pushing 1 round
+per ledger (~12 rounds/min apiece), each one drains ~44 XLM/day. This cron
+tops up all three every Sunday at midnight UTC.
 
 ```bash
 cat > /etc/cron.d/beacon-friendbot <<'EOF'
-0 0 * * 0 root curl -fsS "https://friendbot.stellar.org/?addr=GDKQ55QFCW7NMR2JTYSXCWLRHMEVBVV2667FYRRCKEPRWMIBK2M32VH6" > /dev/null 2>&1 | logger -t beacon-friendbot
+0 0 * * 0 root for addr in G_CHANNEL_A_PUBKEY G_CHANNEL_B_PUBKEY G_CHANNEL_C_PUBKEY; do curl -fsS "https://friendbot.stellar.org/?addr=$addr" > /dev/null 2>&1; done | logger -t beacon-friendbot
 EOF
 chmod 644 /etc/cron.d/beacon-friendbot
 ```
 
-(The `G...` address above is the canonical beacon-feeder account. If you
-deployed your own with a different keypair, replace it with your own public
-address.)
+Replace each `G_CHANNEL_X_PUBKEY` with the corresponding channel account's public address (`stellar keys address beacon-channel-{a,b,c}`).
 
 ---
 

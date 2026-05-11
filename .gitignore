@@ -4,6 +4,7 @@ plan.md
 # Secrets
 .env
 feeder/.env
+feeder/.relayer.env
 
 # Rust build artifacts
 target/

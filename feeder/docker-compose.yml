@@ -6,3 +6,27 @@ services:
     env_file: .env
     ports:
       - "127.0.0.1:3001:3001"
+    depends_on:
+      - oz-relayer
+
+  oz-relayer:
+    image: openzeppelin/openzeppelin-relayer:latest
+    container_name: beacon-oz-relayer
+    restart: unless-stopped
+    env_file: .relayer.env
+    volumes:
+      - ./relayer-config.json:/app/config/config.json:ro
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    container_name: beacon-redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+
+volumes:
+  redis-data:

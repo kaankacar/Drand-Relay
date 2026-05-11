@@ -40,33 +40,37 @@ Latency matters: the feeder needs to submit a tx within a few seconds of each dr
 
 ---
 
-## Step 2 — Create and fund a mainnet account
+## Step 2 — Create and fund mainnet channel accounts
+
+You'll need **3 channel accounts** on mainnet (same pattern as testnet — Stellar caps each source account at 1 tx/ledger, so 3 channels are needed to keep up with drand's 3s round rate). All three are signers managed by OpenZeppelin Relayer; the deployer key from Step 3 stays separate.
 
 On your local machine:
 
 ```bash
-stellar keys generate beacon-feeder-mainnet \
-  --network-passphrase "Public Global Stellar Network ; September 2015" \
-  --rpc-url https://mainnet.sorobanrpc.com   # (use your provider's URL)
-
-# Show the address (G...) — you'll send XLM to this
-stellar keys address beacon-feeder-mainnet
-
-# Show the secret (S...) — keep this safe, the feeder needs it
-stellar keys show beacon-feeder-mainnet
+for n in a b c; do
+  stellar keys generate beacon-channel-$n-mainnet \
+    --network-passphrase "Public Global Stellar Network ; September 2015" \
+    --rpc-url https://mainnet.sorobanrpc.com   # your provider's URL
+  echo "Channel $n pub: $(stellar keys address beacon-channel-$n-mainnet)"
+done
 ```
 
-Buy XLM (Coinbase, Binance, Kraken, etc.) and send it to the address above. **Recommended initial funding:**
+Buy XLM (Coinbase, Binance, Kraken, etc.) and send it to each address. Because the total network spend is split across 3 accounts, divide your runway budget by 3 per account:
 
-- **~5,000 XLM minimum** to start (covers ~1.5 months of feeder operation at current rates plus buffer)
-- **~25,000 XLM** if you want 6 months of runway without refunding
-- Plus **a few hundred XLM** in a separate hot top-up account if you script auto-refills
+- **~1,700 XLM per channel × 3 ≈ 5,000 XLM total** to start (~1.5 months of operation plus buffer)
+- **~8,500 XLM per channel × 3 ≈ 25,000 XLM total** if you want 6 months of runway without refunding
+- Plus **a few hundred XLM** in a separate hot top-up account if you script auto-refills (per Step 5 Option B)
 
-Verify the account is funded:
+Total monthly cost is unchanged from a single-account setup (~3,930 XLM/mo at current rates) — channel accounts split the network's tx volume across multiple signers, they don't multiply spend.
+
+Verify each account is funded:
 
 ```bash
-curl -s "https://horizon.stellar.org/accounts/$(stellar keys address beacon-feeder-mainnet)" \
-  | jq '.balances[] | select(.asset_type == "native") | .balance'
+for n in a b c; do
+  ADDR=$(stellar keys address beacon-channel-$n-mainnet)
+  BAL=$(curl -s "https://horizon.stellar.org/accounts/$ADDR" | jq -r '.balances[] | select(.asset_type=="native") | .balance')
+  echo "$n: $BAL XLM"
+done
 ```
 
 ---

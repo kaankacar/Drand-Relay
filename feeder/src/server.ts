@@ -9,7 +9,12 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
 import { roundToTimestamp } from "./drand.js";
-import { getLatestVerifiedRound, rpc, keypair } from "./soroban.js";
+import { getLatestVerifiedRound, rpc } from "./soroban.js";
+
+const READONLY_SOURCE_PUBKEY = process.env.READONLY_SOURCE_PUBKEY ?? "";
+if (!READONLY_SOURCE_PUBKEY) {
+  throw new Error("READONLY_SOURCE_PUBKEY not set");
+}
 import * as StellarSdk from "@stellar/stellar-sdk";
 import { rpc as RpcNamespace } from "@stellar/stellar-sdk";
 
@@ -100,7 +105,7 @@ export function createApp(getFeed?: () => BeaconEntry[]): express.Application {
 /** Query verifier.get(round) via simulation (read-only, no fee). */
 async function queryRoundFromContract(round: number): Promise<string | null> {
   try {
-    const account = await rpc.getAccount(keypair.publicKey()).catch(() => null);
+    const account = await rpc.getAccount(READONLY_SOURCE_PUBKEY).catch(() => null);
     if (!account) return null;
 
     const contract = new StellarSdk.Contract(VERIFIER_CONTRACT_ID);
