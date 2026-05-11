@@ -2,6 +2,8 @@
 
 A trustless randomness relay that brings [drand](https://drand.love) onto Stellar. Any Soroban contract can read provably unbiased, verifiable randomness with a single cross-contract call.
 
+**▶ Try the live demo: https://kaankacar.github.io/Drand-Relay/** — no wallet needed for the Randomness or Beacon Feed tabs.
+
 The on-chain randomness stored by the verifier is `sha256(compressed_signature)` — exactly the value `api.drand.sh` publishes for the same round. Anyone can cross-check what's on-chain against the public drand API.
 
 ---
