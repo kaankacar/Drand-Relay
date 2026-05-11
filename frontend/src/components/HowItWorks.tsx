@@ -111,10 +111,11 @@ drand verifier contract  (Soroban / Rust, /contracts/drand-verifier)
 any Soroban contract  ──cross-contract call──▶  verifier.get(round)
         `}</Block>
 
-        <Section title="drand source">
+        <Section title="Canonical Stellar testnet deployment">
           <div className="space-y-1 font-mono text-xs">
+            <p><span className="text-gray-500">Verifier  </span><span className="text-gray-200 break-all">CAESC7SC5EW5P2P3IM5Q7E64ZNDATVSN5F57NTCH5E7GJRPDM76KF7QM</span></p>
+            <p><span className="text-gray-500">Dice game </span><span className="text-gray-200 break-all">CCBHSZD3AR6DQMPXBUAT5RELARIMFPZEN6ZLC3SIHU6UQOLUCB35LYUI</span></p>
             <p><span className="text-gray-500">drand     </span><span className="text-gray-200">quicknet · bls-unchained-g1-rfc9380 · 3s period</span></p>
-            <p><span className="text-gray-500">contracts </span><span className="text-gray-200">deploy your own — see README</span></p>
           </div>
         </Section>
       </Card>

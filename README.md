@@ -2,7 +2,22 @@
 
 A trustless randomness relay that brings [drand](https://drand.love) onto Stellar. Any Soroban contract can read provably unbiased, verifiable randomness with a single cross-contract call.
 
-This is a reference implementation showing one way to get verifiable randomness on Soroban — the verifier contract is deployable as-is, and the feeder is something each developer (or operator) is expected to run themselves.
+## Canonical Stellar testnet deployment
+
+Beacon runs as a public testnet service — **you don't need to deploy anything**.
+Just point your contract at the verifier address below and read randomness:
+
+| | |
+|---|---|
+| **Verifier contract** | `CAESC7SC5EW5P2P3IM5Q7E64ZNDATVSN5F57NTCH5E7GJRPDM76KF7QM` |
+| **Dice game (demo)** | `CCBHSZD3AR6DQMPXBUAT5RELARIMFPZEN6ZLC3SIHU6UQOLUCB35LYUI` |
+| **Feeder REST API** | `https://<deployment-in-progress>.duckdns.org` *(URL will be filled in once the public feeder is live — see [docs/RUNBOOK.md](docs/RUNBOOK.md) for the operator-side deploy)* |
+| **Network** | Stellar testnet |
+| **drand source** | quicknet · `bls-unchained-g1-rfc9380` · 3s period |
+
+The on-chain randomness stored by the verifier is `sha256(compressed_signature)` — exactly the value `api.drand.sh` publishes for the same round. Anyone can cross-check what's on-chain against the public drand API.
+
+You only need to "run your own" if you want a dedicated verifier or feeder for some reason (own custody, mainnet, etc.) — full instructions below.
 
 ---
 
@@ -71,15 +86,11 @@ beacon/
 
 ---
 
-## Running this yourself
+## Running your own deployment
 
-This repo is intended as a reference for developers who want verifiable randomness on Soroban. **There is no shared, hosted feeder.** Each project that wants to use beacon should:
+The shared testnet endpoint above is enough for most use cases. If you want your own dedicated stack (separate operator, mainnet, isolated key custody, custom drand chain), the steps below set it up from scratch. The feeder is the only piece that needs to stay running — if it stops, no new rounds get pushed, but already-stored randomness remains queryable on-chain.
 
-1. Deploy its own copy of the verifier contract (or share one with other projects you trust).
-2. Run its own feeder (a Node process that pushes drand rounds to the verifier). The included `Dockerfile` makes this easy.
-3. Make sure the feeder account has enough XLM for transaction fees — pairing checks aren't free.
-
-The feeder is the only piece that needs to stay running. If it stops, no new rounds get pushed, but already-stored randomness remains queryable on-chain.
+If you're hosting the public feeder yourself on a Linux VPS, follow [`docs/RUNBOOK.md`](docs/RUNBOOK.md) — it's a step-by-step deploy guide written for someone who's never run a Linux server before.
 
 ### Prerequisites
 
@@ -157,25 +168,26 @@ pub trait DrandVerifier {
 Then use commit/reveal to prevent front-running:
 
 ```rust
+const VERIFIER: &str = "CAESC7SC5EW5P2P3IM5Q7E64ZNDATVSN5F57NTCH5E7GJRPDM76KF7QM"; // canonical testnet
 const GENESIS: u64 = 1_692_803_367;
 const PERIOD:  u64 = 3;
 const BUFFER:  u64 = 10;
 
 // Phase 1: commit to a future round (randomness doesn't exist yet)
-pub fn start(env: Env, user: Address, verifier: Address, target_round: u64) {
+pub fn start(env: Env, user: Address, target_round: u64) {
     user.require_auth();
     let now     = env.ledger().timestamp();
     let current = (now.saturating_sub(GENESIS)) / PERIOD + 1;
     assert!(target_round >= current + BUFFER, "round must be in the future");
-    env.storage().persistent().set(&user, &(verifier, target_round));
+    env.storage().persistent().set(&user, &target_round);
 }
 
 // Phase 2: reveal after feeder has pushed target_round
 pub fn reveal(env: Env, user: Address) -> u32 {
-    let (verifier, round): (Address, u64) =
-        env.storage().persistent().get(&user).unwrap();
-    let client = DrandVerifierClient::new(&env, &verifier);
-    let rand   = client.get(&round).expect("round not yet available");
+    let round: u64 = env.storage().persistent().get(&user).unwrap();
+    let verifier   = Address::from_str(&env, VERIFIER);
+    let client     = DrandVerifierClient::new(&env, &verifier);
+    let rand       = client.get(&round).expect("round not yet available");
     (rand.get(0).unwrap() % 100) as u32  // 0–99
 }
 ```
