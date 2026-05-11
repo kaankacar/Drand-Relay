@@ -240,18 +240,19 @@ cat > /etc/caddy/Caddyfile <<'EOF'
 <DUCKDNS_SUBDOMAIN>.duckdns.org {
     reverse_proxy 127.0.0.1:3001
     encode gzip
-
-    header {
-        Access-Control-Allow-Origin "*"
-        Access-Control-Allow-Methods "GET, OPTIONS"
-        Access-Control-Allow-Headers "Content-Type"
-    }
 }
 EOF
 ```
 
 (Replace `<DUCKDNS_SUBDOMAIN>` with your actual subdomain before pasting — or
 edit afterwards with `nano /etc/caddy/Caddyfile`.)
+
+> **Do not add a `header { Access-Control-Allow-Origin "*" ... }` block here.**
+> The feeder's Express app already emits CORS headers via the `cors()`
+> middleware (see `feeder/src/server.ts`). Adding them again in Caddy produces
+> **two** `Access-Control-Allow-Origin` headers on every response, which Chrome
+> rejects with `TypeError: Failed to fetch` and breaks any browser client (the
+> live demo included). One source of CORS truth — the application — is enough.
 
 Reload Caddy to pick up the config:
 
